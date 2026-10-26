@@ -1,0 +1,21 @@
+{
+  "$schema": "https://apify.com/schemas/v1/actor.ide.json",
+  "actorSpecification": 1,
+  "name": "hepsiburada-seller-scraper",
+  "title": "Hepsiburada Seller Lead Scraper",
+  "description": "Discovers Hepsiburada sellers from public product listings and enriches public store profile and legal-business data.",
+  "version": "0.1",
+  "buildTag": "latest",
+  "environmentVariables": {
+    "BRIGHT_DATA_API_KEY": "@BRIGHT_DATA_API_KEY",
+    "BRIGHT_DATA_ZONE": "ebay_live_unlocker"
+  },
+  "inputSchema": "./input_schema.json",
+  "storages": { "dataset": "./dataset_schema.json" },
+  "dockerfile": "../Dockerfile",
+  "defaultRunOptions": {
+    "build": "latest",
+    "timeoutSecs": 3600,
+    "memoryMbytes": 2048
+  }
+}

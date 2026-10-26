@@ -1,0 +1,211 @@
+{
+  "$schema": "https://apify.com/schemas/v1/input.ide.json",
+  "title": "Hepsiburada seller lead discovery",
+  "description": "Discover sellers from Hepsiburada search/category/product/store pages and enrich public store profile and business-registration fields.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "campaignId": {
+      "title": "Aime campaign ID",
+      "type": "string",
+      "description": "Optional Aime campaign identifier passed through to every Dataset row and OUTPUT record.",
+      "editor": "textfield",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "maxLength": 128,
+      "sectionCaption": "Aime orchestration"
+    },
+    "shardId": {
+      "title": "Aime shard ID",
+      "type": "string",
+      "description": "Optional Aime shard identifier passed through to every Dataset row and OUTPUT record.",
+      "editor": "textfield",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "maxLength": 128
+    },
+    "searchQueries": {
+      "title": "Search queries",
+      "type": "array",
+      "description": "Product, brand, or category phrases used on Hepsiburada search pages.",
+      "editor": "stringList",
+      "default": [],
+      "prefill": ["kahve makinesi"],
+      "maxItems": 50,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "startUrls": {
+      "title": "Hepsiburada URLs",
+      "type": "array",
+      "description": "Optional public search, category, product, or store URLs. Provide searchQueries or startUrls.",
+      "editor": "requestListSources",
+      "default": [],
+      "prefill": []
+    },
+    "maxPagesPerSource": {
+      "title": "Maximum pages per source",
+      "type": "integer",
+      "description": "Pagination cap for each keyword or listing URL.",
+      "editor": "number",
+      "default": 1,
+      "minimum": 1,
+      "maximum": 20,
+      "sectionCaption": "Discovery"
+    },
+    "maxProductsPerSource": {
+      "title": "Maximum products per source page",
+      "type": "integer",
+      "description": "Maximum product links sampled from each search/category page.",
+      "editor": "number",
+      "default": 20,
+      "minimum": 1,
+      "maximum": 200
+    },
+    "maxProductDetails": {
+      "title": "Maximum product detail pages",
+      "type": "integer",
+      "description": "Maximum product pages inspected for winner and other seller evidence.",
+      "editor": "number",
+      "default": 30,
+      "minimum": 1,
+      "maximum": 500
+    },
+    "maxOtherSellersPerProduct": {
+      "title": "Other sellers per product",
+      "type": "integer",
+      "description": "Maximum non-buy-box sellers collected from each product detail page.",
+      "editor": "number",
+      "default": 10,
+      "minimum": 0,
+      "maximum": 50
+    },
+    "maxSellerCandidates": {
+      "title": "Maximum seller candidates",
+      "type": "integer",
+      "description": "Maximum unique seller profiles inspected before qualification filters.",
+      "editor": "number",
+      "default": 50,
+      "minimum": 1,
+      "maximum": 2000,
+      "sectionCaption": "Seller qualification"
+    },
+    "maxSellers": {
+      "title": "Maximum qualified sellers",
+      "type": "integer",
+      "description": "Maximum qualified merchant leads checkpointed to the Dataset.",
+      "editor": "number",
+      "default": 10,
+      "minimum": 1,
+      "maximum": 500
+    },
+    "minSellerRating": {
+      "title": "Minimum seller rating",
+      "type": "number",
+      "description": "Minimum public Hepsiburada seller score on the 0-10 scale.",
+      "editor": "number",
+      "default": 0,
+      "minimum": 0,
+      "maximum": 10
+    },
+    "minFollowerCount": {
+      "title": "Minimum followers",
+      "type": "integer",
+      "description": "Only output stores whose public follower count meets this threshold.",
+      "editor": "number",
+      "default": 0,
+      "minimum": 0
+    },
+    "minProductCount": {
+      "title": "Minimum store products",
+      "type": "integer",
+      "description": "Only output stores whose public product count meets this threshold.",
+      "editor": "number",
+      "default": 1,
+      "minimum": 0
+    },
+    "minSellerReviewCount": {
+      "title": "Minimum seller reviews",
+      "type": "integer",
+      "description": "Only output stores whose public seller review count meets this threshold.",
+      "editor": "number",
+      "default": 0,
+      "minimum": 0
+    },
+    "sellerCities": {
+      "title": "Shipping cities",
+      "type": "array",
+      "description": "Optional case-insensitive exact filter on public primary shipping city, for example ISTANBUL or TRABZON.",
+      "editor": "stringList",
+      "default": [],
+      "items": { "type": "string" }
+    },
+    "sellerTypes": {
+      "title": "Seller types / labels",
+      "type": "array",
+      "description": "Optional exact filter on public seller labels such as Yetkili Satıcı. Leave empty for all types.",
+      "editor": "stringList",
+      "default": [],
+      "items": { "type": "string" }
+    },
+    "requireSellerProfile": {
+      "title": "Require store profile",
+      "type": "boolean",
+      "description": "Exclude candidates when the public store profile cannot be parsed.",
+      "editor": "checkbox",
+      "default": true
+    },
+    "maxConcurrency": {
+      "title": "Discovery/detail concurrency",
+      "type": "integer",
+      "description": "Parallel search and product-detail Web Unlocker requests.",
+      "editor": "number",
+      "default": 3,
+      "minimum": 1,
+      "maximum": 8,
+      "sectionCaption": "Run controls"
+    },
+    "maxProfileConcurrency": {
+      "title": "Store profile concurrency",
+      "type": "integer",
+      "description": "Parallel public store profile Web Unlocker requests.",
+      "editor": "number",
+      "default": 3,
+      "minimum": 1,
+      "maximum": 8
+    },
+    "maxRequestRetries": {
+      "title": "Maximum retries",
+      "type": "integer",
+      "description": "Retries after a failed or blocked Web Unlocker request.",
+      "editor": "number",
+      "default": 2,
+      "minimum": 0,
+      "maximum": 5
+    },
+    "navigationTimeoutSecs": {
+      "title": "Request timeout seconds",
+      "type": "integer",
+      "description": "Maximum duration of each Web Unlocker request.",
+      "editor": "number",
+      "default": 180,
+      "minimum": 30,
+      "maximum": 300
+    },
+    "dedupeMode": {
+      "title": "Cross-run deduplication",
+      "type": "string",
+      "description": "Emit all qualified rows, only new sellers, or new and changed sellers.",
+      "editor": "select",
+      "default": "new_and_updated",
+      "enum": ["all", "new_only", "new_and_updated"],
+      "enumTitles": ["All qualified leads", "New sellers only", "New and updated sellers"],
+      "sectionCaption": "Cross-run deduplication"
+    },
+    "dedupeStoreName": {
+      "title": "Persistent state store",
+      "type": "string",
+      "description": "Named Key-Value Store shared across Runs; use a distinct name per campaign when isolation is required.",
+      "editor": "textfield",
+      "default": "hepsiburada-seller-lead-state-v1",
+      "pattern": "^[A-Za-z0-9._-]{3,63}$"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "campaignId": "cmp_hepsiburada_smoke",
+  "shardId": "shd_coffee_01",
+  "searchQueries": ["kahve makinesi"],
+  "maxPagesPerSource": 1,
+  "maxProductsPerSource": 10,
+  "maxProductDetails": 5,
+  "maxSellerCandidates": 10,
+  "maxSellers": 3,
+  "minSellerRating": 0,
+  "minFollowerCount": 0,
+  "minProductCount": 1,
+  "dedupeMode": "all"
+}
