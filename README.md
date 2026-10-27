@@ -1,6 +1,6 @@
 # Hepsiburada Seller Scraper
 
-Custom Apify Actor for discovering Hepsiburada merchant leads. It starts from public keyword, category, product, or store URLs, discovers merchants from product pages, and enriches each merchant from the public store profile.
+Custom Apify Actor for discovering Hepsiburada merchant leads. It starts from public keyword, category, product, or store URLs, discovers merchants from product pages, and enriches each merchant from the public store profile. If the caller supplies no discovery source, it automatically rotates across electronics, home & living, fashion, and beauty queries.
 
 ## Data flow
 
@@ -27,7 +27,7 @@ The parser reads server-rendered JSON state (`reduxStore` and `MCONTENT.MERCHANT
 | Field | Meaning |
 | --- | --- |
 | `campaignId`, `shardId` | Optional Aime pass-through tracing IDs |
-| `searchQueries` | Product, brand, or category search phrases |
+| `searchQueries` | Optional product, brand, or category phrases; empty uses balanced default categories |
 | `startUrls` | Search/category/product/store URLs |
 | `maxSellers` | Maximum qualified sellers checkpointed to Dataset |
 | `maxSellerCandidates` | Maximum public store profiles inspected |
@@ -35,7 +35,7 @@ The parser reads server-rendered JSON state (`reduxStore` and `MCONTENT.MERCHANT
 | `sellerCities`, `sellerTypes` | Optional exact public-profile filters |
 | `dedupeMode`, `dedupeStoreName` | Cross-run seller deduplication |
 
-At least one `searchQueries` or `startUrls` value is required.
+Both discovery fields may be empty. In that case the Actor uses `elektronik`, `ev yaşam`, `moda`, and `kozmetik` automatically, then stops after `maxSellers` qualified leads.
 
 ## Output
 

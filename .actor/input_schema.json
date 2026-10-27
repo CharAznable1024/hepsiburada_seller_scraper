@@ -25,17 +25,17 @@
     "searchQueries": {
       "title": "Search queries",
       "type": "array",
-      "description": "Product, brand, or category phrases used on Hepsiburada search pages.",
+      "description": "Optional product, brand, or category phrases. Leave empty together with startUrls to automatically discover across electronics, home & living, fashion, and beauty.",
       "editor": "stringList",
       "default": [],
-      "prefill": ["kahve makinesi"],
+      "prefill": [],
       "maxItems": 50,
       "items": { "type": "string", "minLength": 1 }
     },
     "startUrls": {
       "title": "Hepsiburada URLs",
       "type": "array",
-      "description": "Optional public search, category, product, or store URLs. Provide searchQueries or startUrls.",
+      "description": "Optional public search, category, product, or store URLs. When both source fields are empty, the Actor uses balanced default category queries.",
       "editor": "requestListSources",
       "default": [],
       "prefill": []

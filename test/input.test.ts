@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeInput } from '../src/input.js';
+import { DEFAULT_SEARCH_QUERIES, normalizeInput } from '../src/input.js';
 
 describe('normalizeInput', () => {
     it('normalizes Aime tracing and operational defaults', () => {
@@ -17,8 +17,10 @@ describe('normalizeInput', () => {
         expect(input.startUrls).toEqual(['https://www.hepsiburada.com/magaza/viratech?tab=profile']);
     });
 
-    it('requires a discovery source', () => {
-        expect(() => normalizeInput({})).toThrow('Provide at least one');
+    it('uses balanced default categories when no discovery source is supplied', () => {
+        const input = normalizeInput({});
+        expect(input.searchQueries).toEqual(DEFAULT_SEARCH_QUERIES);
+        expect(input.startUrls).toEqual([]);
     });
 
     it('rejects non-Hepsiburada URLs and invalid IDs', () => {
