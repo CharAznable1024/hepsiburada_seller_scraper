@@ -24,6 +24,10 @@ export interface ActorInput {
     navigationTimeoutSecs?: unknown;
     dedupeMode?: unknown;
     dedupeStoreName?: unknown;
+    contactEnrichment?: unknown;
+    maxContactEnrichmentLeads?: unknown;
+    maxWebsiteCandidates?: unknown;
+    minContactConfidence?: unknown;
 }
 
 export interface Input {
@@ -50,6 +54,10 @@ export interface Input {
     navigationTimeoutSecs: number;
     dedupeMode: DedupeMode;
     dedupeStoreName: string;
+    contactEnrichment: boolean;
+    maxContactEnrichmentLeads: number;
+    maxWebsiteCandidates: number;
+    minContactConfidence: number;
 }
 
 export interface UnlockerUsage {
@@ -154,6 +162,14 @@ export interface SellerLead {
     mersis_number: string | null;
     registered_address: string | null;
     contact_disclosure: string | null;
+    official_website: string | null;
+    public_business_emails: string[];
+    public_business_phones: string[];
+    whatsapp_urls: string[];
+    social_urls: string[];
+    contact_source_urls: string[];
+    contact_confidence: number;
+    contact_status: 'not_requested' | 'platform_only' | 'verified' | 'not_found' | 'error';
     brands: string[];
     categories: string[];
     matched_product_count: number;
@@ -206,6 +222,10 @@ export interface RunSummary {
     qualified_lead_count: number;
     emitted_lead_count: number;
     duplicate_suppressed_count: number;
+    contact_enrichment_attempted: number;
+    contact_enrichment_verified: number;
+    contact_emails_found: number;
+    contact_phones_found: number;
     failed_sources: Array<{ source: string; error: string }>;
     unlocker_configured: boolean;
     unlocker_usage: UnlockerUsage;

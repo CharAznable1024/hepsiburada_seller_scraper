@@ -10,6 +10,9 @@ describe('normalizeInput', () => {
         expect(input.searchQueries).toEqual(['kahve makinesi']);
         expect(input.maxSellers).toBe(10);
         expect(input.requireSellerProfile).toBe(true);
+        expect(input.contactEnrichment).toBe(true);
+        expect(input.maxContactEnrichmentLeads).toBe(5);
+        expect(input.minContactConfidence).toBe(70);
     });
 
     it('accepts request-list URL objects', () => {

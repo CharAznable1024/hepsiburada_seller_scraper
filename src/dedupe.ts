@@ -29,6 +29,11 @@ const fingerprint = (lead: SellerLead): string => createHash('sha256').update(JS
     tax_number: lead.tax_number,
     mersis_number: lead.mersis_number,
     registered_address: lead.registered_address,
+    official_website: lead.official_website,
+    public_business_emails: [...lead.public_business_emails].sort(),
+    public_business_phones: [...lead.public_business_phones].sort(),
+    whatsapp_urls: [...lead.whatsapp_urls].sort(),
+    social_urls: [...lead.social_urls].sort(),
 })).digest('hex');
 
 export async function applyDedupe(

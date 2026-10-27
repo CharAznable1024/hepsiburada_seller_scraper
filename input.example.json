@@ -9,5 +9,8 @@
   "minSellerRating": 0,
   "minFollowerCount": 0,
   "minProductCount": 1,
+  "contactEnrichment": true,
+  "maxContactEnrichmentLeads": 3,
+  "minContactConfidence": 70,
   "dedupeMode": "all"
 }

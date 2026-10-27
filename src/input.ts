@@ -86,5 +86,9 @@ export function normalizeInput(raw: ActorInput | null | undefined): Input {
         navigationTimeoutSecs: integer(data.navigationTimeoutSecs, 180, 30, 300, 'navigationTimeoutSecs'),
         dedupeMode,
         dedupeStoreName,
+        contactEnrichment: boolean(data.contactEnrichment, true, 'contactEnrichment'),
+        maxContactEnrichmentLeads: integer(data.maxContactEnrichmentLeads, 5, 0, 50, 'maxContactEnrichmentLeads'),
+        maxWebsiteCandidates: integer(data.maxWebsiteCandidates, 3, 1, 5, 'maxWebsiteCandidates'),
+        minContactConfidence: integer(data.minContactConfidence, 70, 0, 100, 'minContactConfidence'),
     };
 }

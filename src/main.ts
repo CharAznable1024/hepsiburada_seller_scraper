@@ -3,8 +3,9 @@ import { Actor, log } from 'apify';
 import { applyDedupe } from './dedupe.js';
 import { normalizeInput } from './input.js';
 import { extractProductUrls, isProductUrl, isStoreUrl, parseMerchantProfile, parseProductPage } from './parser.js';
-import type { ActorInput, MerchantCandidate, MerchantProfile, RunSummary, SellerLead } from './types.js';
+import type { ActorInput, MerchantCandidate, MerchantProfile, RunSummary, SellerLead, UnlockerUsage } from './types.js';
 import { BrightDataUnlocker } from './unlocker.js';
+import { enrichPublicBusinessContacts } from './contact-enrichment.js';
 
 await Actor.init();
 
@@ -19,6 +20,12 @@ const unlocker = new BrightDataUnlocker({
     zone: process.env.BRIGHT_DATA_ZONE?.trim() || 'ebay_live_unlocker',
     timeoutMillis: input.navigationTimeoutSecs * 1_000,
     maxAttempts: input.maxRequestRetries + 1,
+});
+const contactUnlocker = new BrightDataUnlocker({
+    apiKey: brightDataApiKey,
+    zone: process.env.BRIGHT_DATA_ZONE?.trim() || 'ebay_live_unlocker',
+    timeoutMillis: Math.min(60_000, input.navigationTimeoutSecs * 1_000),
+    maxAttempts: 1,
 });
 const dedupeStore = await Actor.openKeyValueStore(input.dedupeStoreName);
 const startedAt = new Date().toISOString();
@@ -35,8 +42,24 @@ let sellerProfileFailed = 0;
 let qualifiedLeadCount = 0;
 let emittedLeadCount = 0;
 let duplicateSuppressedCount = 0;
+let contactEnrichmentAttempted = 0;
+let contactEnrichmentVerified = 0;
+let contactEmailsFound = 0;
+let contactPhonesFound = 0;
 
 const discoverySources: Array<{ url: string; label: string }> = [];
+
+function combinedUnlockerUsage(...usages: UnlockerUsage[]): UnlockerUsage {
+    return {
+        logical_requests: usages.reduce((sum, value) => sum + value.logical_requests, 0),
+        request_attempts: usages.reduce((sum, value) => sum + value.request_attempts, 0),
+        successful_requests: usages.reduce((sum, value) => sum + value.successful_requests, 0),
+        failed_attempts: usages.reduce((sum, value) => sum + value.failed_attempts, 0),
+        static_requests: usages.reduce((sum, value) => sum + value.static_requests, 0),
+        rendered_requests: usages.reduce((sum, value) => sum + value.rendered_requests, 0),
+        estimated_cost_usd: Number(usages.reduce((sum, value) => sum + value.estimated_cost_usd, 0).toFixed(6)),
+    };
+}
 
 function paginatedUrl(value: string, page: number): string {
     const url = new URL(value);
@@ -85,9 +108,13 @@ function summary(status: RunSummary['status']): RunSummary {
         qualified_lead_count: qualifiedLeadCount,
         emitted_lead_count: emittedLeadCount,
         duplicate_suppressed_count: duplicateSuppressedCount,
+        contact_enrichment_attempted: contactEnrichmentAttempted,
+        contact_enrichment_verified: contactEnrichmentVerified,
+        contact_emails_found: contactEmailsFound,
+        contact_phones_found: contactPhonesFound,
         failed_sources: failedSources,
         unlocker_configured: true,
-        unlocker_usage: { ...unlocker.usage },
+        unlocker_usage: combinedUnlockerUsage(unlocker.usage, contactUnlocker.usage),
         started_at: startedAt,
         ...(status === 'RUNNING' ? {} : { finished_at: new Date().toISOString() }),
     };
@@ -217,6 +244,14 @@ function buildLead(candidate: MerchantCandidate, profile: MerchantProfile | null
         mersis_number: profile?.mersis_number ?? null,
         registered_address: profile?.registered_address ?? null,
         contact_disclosure: profile?.contact_disclosure ?? null,
+        official_website: null,
+        public_business_emails: profile?.registered_email ? [profile.registered_email] : [],
+        public_business_phones: [],
+        whatsapp_urls: [],
+        social_urls: [],
+        contact_source_urls: [],
+        contact_confidence: profile?.registered_email ? 100 : 0,
+        contact_status: profile?.registered_email ? 'platform_only' : 'not_requested',
         brands: [...new Set(candidate.evidences.flatMap((item) => item.brand ?? []))],
         categories: [...new Set(candidate.evidences.flatMap((item) => item.categories))],
         matched_product_count: candidate.evidences.length,
@@ -317,7 +352,7 @@ try {
         for (const { candidate, profile } of results) {
             if (emittedLeadCount >= input.maxSellers) break;
             if (input.requireSellerProfile && !profile) continue;
-            const lead = buildLead(candidate, profile);
+            let lead = buildLead(candidate, profile);
             const qualification = qualifies(lead);
             if (!qualification.qualified) continue;
             qualifiedLeadCount += 1;
@@ -327,6 +362,22 @@ try {
                 `product_count>=${input.minProductCount}`,
                 `seller_review_count>=${input.minSellerReviewCount}`,
             ];
+            if (input.contactEnrichment && contactEnrichmentAttempted < input.maxContactEnrichmentLeads) {
+                contactEnrichmentAttempted += 1;
+                try {
+                    const contact = await enrichPublicBusinessContacts(lead, contactUnlocker, {
+                        maxCandidates: input.maxWebsiteCandidates,
+                        minimumConfidence: input.minContactConfidence,
+                    });
+                    lead = { ...lead, ...contact };
+                    if (contact.contact_status === 'verified') contactEnrichmentVerified += 1;
+                    contactEmailsFound += contact.public_business_emails.length;
+                    contactPhonesFound += contact.public_business_phones.length;
+                } catch (error) {
+                    log.warning('Public business contact enrichment failed', { sellerId: lead.seller_id, error: String(error) });
+                    lead.contact_status = lead.public_business_emails.length ? 'platform_only' : 'error';
+                }
+            }
             const dedupe = await applyDedupe(dedupeStore, lead, input.dedupeMode);
             if (!dedupe.emit) {
                 duplicateSuppressedCount += 1;

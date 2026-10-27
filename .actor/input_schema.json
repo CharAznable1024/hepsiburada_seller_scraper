@@ -206,6 +206,41 @@
       "editor": "textfield",
       "default": "hepsiburada-seller-lead-state-v1",
       "pattern": "^[A-Za-z0-9._-]{3,63}$"
+    },
+    "contactEnrichment": {
+      "title": "Discover public business contacts",
+      "type": "boolean",
+      "description": "Search for likely official websites and extract only publicly verifiable business email, phone, WhatsApp, and social links.",
+      "editor": "checkbox",
+      "default": true,
+      "sectionCaption": "Public business contact enrichment"
+    },
+    "maxContactEnrichmentLeads": {
+      "title": "Maximum sellers to enrich",
+      "type": "integer",
+      "description": "Maximum qualified sellers whose public website candidates are inspected in one Run.",
+      "editor": "number",
+      "default": 5,
+      "minimum": 0,
+      "maximum": 50
+    },
+    "maxWebsiteCandidates": {
+      "title": "Website candidates per seller",
+      "type": "integer",
+      "description": "Maximum non-directory website candidates inspected for one seller.",
+      "editor": "number",
+      "default": 3,
+      "minimum": 1,
+      "maximum": 5
+    },
+    "minContactConfidence": {
+      "title": "Minimum contact confidence",
+      "type": "integer",
+      "description": "Minimum identity-match score required before a candidate is accepted as an official business website.",
+      "editor": "number",
+      "default": 70,
+      "minimum": 0,
+      "maximum": 100
     }
   }
 }
