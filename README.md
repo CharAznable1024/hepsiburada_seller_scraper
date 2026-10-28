@@ -63,7 +63,7 @@ Qualified rows are written immediately with `Actor.pushData`, so already checkpo
 
 ## Access and cost
 
-Direct cloud requests to Hepsiburada have timed out in previous tests. `accessMode: "apify_proxy"` routes every request through Apify Residential Proxy with Turkey routing and never calls Bright Data. `bright_data` preserves the previous Web Unlocker path, while `auto` tries direct, Apify Proxy, then Bright Data when configured.
+Direct cloud requests to Hepsiburada have timed out in previous tests. The default `accessMode: "apify_proxy"` routes every request through Apify Residential Proxy with Turkey routing and never calls Bright Data. `bright_data` preserves the previous Web Unlocker path as an explicit fallback, while `auto` tries direct, Apify Proxy, then Bright Data when configured.
 
 With the current Bright Data plan, each successful page request is estimated at **$0.0015**. Approximate successful requests are:
 

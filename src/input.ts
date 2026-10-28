@@ -54,7 +54,7 @@ export function normalizeInput(raw: ActorInput | null | undefined): Input {
     if (!['full_platform', 'custom'].includes(crawlScope)) throw new Error('crawlScope must be full_platform or custom');
     if (crawlScope === 'full_platform' && hasCustomSources) throw new Error('searchQueries and startUrls must be empty in full_platform mode');
     if (crawlScope === 'custom' && !hasCustomSources) throw new Error('custom crawlScope requires searchQueries or startUrls');
-    const accessMode = (data.accessMode ?? 'bright_data') as AccessMode;
+    const accessMode = (data.accessMode ?? 'apify_proxy') as AccessMode;
     if (!['direct', 'apify_proxy', 'bright_data', 'auto'].includes(accessMode)) throw new Error('Invalid accessMode');
     const apifyProxyCountry = data.apifyProxyCountry ?? 'TR';
     if (typeof apifyProxyCountry !== 'string' || !/^[A-Za-z]{2}$/.test(apifyProxyCountry)) {

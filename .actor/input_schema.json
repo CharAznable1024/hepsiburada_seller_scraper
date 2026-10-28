@@ -46,7 +46,7 @@
       "type": "string",
       "description": "Choose direct HTTP, Apify Residential Proxy, Bright Data Web Unlocker, or automatic fallback.",
       "editor": "select",
-      "default": "bright_data",
+      "default": "apify_proxy",
       "enum": ["direct", "apify_proxy", "bright_data", "auto"],
       "enumTitles": ["Direct only", "Apify Residential Proxy", "Bright Data", "Automatic fallback"]
     },

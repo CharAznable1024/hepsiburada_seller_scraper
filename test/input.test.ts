@@ -9,7 +9,7 @@ describe('normalizeInput', () => {
         expect(input.shardId).toBe('shd_1');
         expect(input.searchQueries).toEqual(['kahve makinesi']);
         expect(input.crawlScope).toBe('custom');
-        expect(input.accessMode).toBe('bright_data');
+        expect(input.accessMode).toBe('apify_proxy');
         expect(input.apifyProxyCountry).toBe('TR');
         expect(input.maxSellers).toBe(10);
         expect(input.minProductCount).toBe(0);
