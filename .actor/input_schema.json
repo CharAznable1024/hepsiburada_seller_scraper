@@ -25,7 +25,7 @@
     "searchQueries": {
       "title": "Search queries",
       "type": "array",
-      "description": "Optional product, brand, or category phrases. Leave empty together with startUrls to automatically discover across electronics, home & living, fashion, and beauty.",
+      "description": "Optional product, brand, or category phrases. Leave empty together with startUrls to start the resumable full-catalog crawl from Electronics.",
       "editor": "stringList",
       "default": [],
       "prefill": [],
@@ -35,7 +35,7 @@
     "startUrls": {
       "title": "Hepsiburada URLs",
       "type": "array",
-      "description": "Optional public search, category, product, or store URLs. When both source fields are empty, the Actor uses balanced default category queries.",
+      "description": "Optional public search, category, product, or store URLs. When both source fields are empty, the Actor starts from the Electronics category.",
       "editor": "requestListSources",
       "default": [],
       "prefill": []
@@ -43,12 +43,27 @@
     "maxPagesPerSource": {
       "title": "Maximum pages per source",
       "type": "integer",
-      "description": "Pagination cap for each keyword or listing URL.",
+      "description": "Number of consecutive pages handled by this shard for each source.",
       "editor": "number",
       "default": 1,
       "minimum": 1,
       "maximum": 20,
       "sectionCaption": "Discovery"
+    },
+    "startPage": {
+      "title": "Explicit start page",
+      "type": "integer",
+      "description": "Optional page override for a manually assigned shard. Leave unset to continue from the persistent checkpoint.",
+      "editor": "number",
+      "minimum": 1,
+      "maximum": 1000000
+    },
+    "resumeFromCheckpoint": {
+      "title": "Resume from checkpoint",
+      "type": "boolean",
+      "description": "When startPage is unset, continue from the next unfinished page stored in dedupeStoreName.",
+      "editor": "checkbox",
+      "default": true
     },
     "maxProductsPerSource": {
       "title": "Maximum products per source page",
@@ -118,7 +133,7 @@
       "type": "integer",
       "description": "Only output stores whose public product count meets this threshold.",
       "editor": "number",
-      "default": 1,
+      "default": 0,
       "minimum": 0
     },
     "minSellerReviewCount": {
@@ -194,7 +209,7 @@
       "type": "string",
       "description": "Emit all qualified rows, only new sellers, or new and changed sellers.",
       "editor": "select",
-      "default": "new_and_updated",
+      "default": "new_only",
       "enum": ["all", "new_only", "new_and_updated"],
       "enumTitles": ["All qualified leads", "New sellers only", "New and updated sellers"],
       "sectionCaption": "Cross-run deduplication"
@@ -212,7 +227,7 @@
       "type": "boolean",
       "description": "Search for likely official websites and extract only publicly verifiable business email, phone, WhatsApp, and social links.",
       "editor": "checkbox",
-      "default": true,
+      "default": false,
       "sectionCaption": "Public business contact enrichment"
     },
     "maxContactEnrichmentLeads": {

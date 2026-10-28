@@ -1,9 +1,10 @@
 import { Actor, log } from 'apify';
 
+import { CrawlState, type PageProgress } from './crawl-state.js';
 import { applyDedupe } from './dedupe.js';
 import { normalizeInput } from './input.js';
 import { extractProductUrls, isProductUrl, isStoreUrl, parseMerchantProfile, parseProductPage } from './parser.js';
-import type { ActorInput, MerchantCandidate, MerchantProfile, RunSummary, SellerLead, UnlockerUsage } from './types.js';
+import type { ActorInput, MerchantCandidate, MerchantProfile, ProductEvidence, RunSummary, SellerLead, SourceCursor, UnlockerUsage } from './types.js';
 import { BrightDataUnlocker } from './unlocker.js';
 import { enrichPublicBusinessContacts } from './contact-enrichment.js';
 
@@ -28,11 +29,14 @@ const contactUnlocker = new BrightDataUnlocker({
     maxAttempts: 1,
 });
 const dedupeStore = await Actor.openKeyValueStore(input.dedupeStoreName);
+const crawlState = new CrawlState(dedupeStore, 'sayfa');
 const startedAt = new Date().toISOString();
 const failedSources: Array<{ source: string; error: string }> = [];
 const productUrls = new Map<string, Set<string>>();
 const candidates = new Map<string, MerchantCandidate>();
 const knownProfiles = new Map<string, MerchantProfile>();
+const discoveredSellerIds = new Set<string>();
+const sourceCursors = new Map<string, SourceCursor>();
 
 let productDetailAttempted = 0;
 let productDetailSucceeded = 0;
@@ -46,8 +50,17 @@ let contactEnrichmentAttempted = 0;
 let contactEnrichmentVerified = 0;
 let contactEmailsFound = 0;
 let contactPhonesFound = 0;
+let pageAttempted = 0;
+let pageCompleted = 0;
+let pageSkipped = 0;
+let pageResumed = 0;
+let productCacheHits = 0;
+let sellerProfileCacheHits = 0;
+let productDetailFetches = 0;
+let sellerCandidateProcessed = 0;
 
 const discoverySources: Array<{ url: string; label: string }> = [];
+const directProductUrls: Array<{ url: string; label: string }> = [];
 
 function combinedUnlockerUsage(...usages: UnlockerUsage[]): UnlockerUsage {
     return {
@@ -69,21 +82,18 @@ function paginatedUrl(value: string, page: number): string {
 
 for (const query of input.searchQueries) {
     const base = `https://www.hepsiburada.com/ara?q=${encodeURIComponent(query)}`;
-    for (let page = 1; page <= input.maxPagesPerSource; page += 1) {
-        discoverySources.push({ url: paginatedUrl(base, page), label: query });
-    }
+    discoverySources.push({ url: base, label: query });
 }
 for (const startUrl of input.startUrls) {
     if (isProductUrl(startUrl)) {
-        productUrls.set(startUrl, new Set([startUrl]));
+        directProductUrls.push({ url: startUrl, label: startUrl });
         continue;
     }
-    for (let page = 1; page <= input.maxPagesPerSource; page += 1) {
-        discoverySources.push({ url: paginatedUrl(startUrl, page), label: startUrl });
-    }
+    discoverySources.push({ url: startUrl, label: startUrl });
 }
 
 function summary(status: RunSummary['status']): RunSummary {
+    const cursors = [...sourceCursors.values()];
     return {
         status,
         schema_version: '1.0',
@@ -93,13 +103,21 @@ function summary(status: RunSummary['status']): RunSummary {
         dataset_id: datasetId,
         scanned_count: sellerProfileAttempted,
         qualified_count: emittedLeadCount,
-        next_cursor: null,
-        has_more: productUrls.size > productDetailAttempted || candidates.size > sellerProfileAttempted,
+        next_cursor: cursors.length ? { version: 1, sources: cursors } : null,
+        has_more: cursors.some((cursor) => !cursor.exhausted),
+        start_page: input.startPage,
+        resume_from_checkpoint: input.resumeFromCheckpoint,
+        page_attempted: pageAttempted,
+        page_completed: pageCompleted,
+        page_skipped: pageSkipped,
+        page_resumed: pageResumed,
+        product_cache_hits: productCacheHits,
+        seller_profile_cache_hits: sellerProfileCacheHits,
         search_queries: input.searchQueries,
         start_urls: input.startUrls,
         discovery_source_count: discoverySources.length,
         discovered_product_count: productUrls.size,
-        discovered_seller_count: candidates.size,
+        discovered_seller_count: discoveredSellerIds.size,
         product_detail_attempted: productDetailAttempted,
         product_detail_succeeded: productDetailSucceeded,
         seller_profile_attempted: sellerProfileAttempted,
@@ -144,13 +162,13 @@ async function mapConcurrent<T, R>(values: T[], concurrency: number, worker: (va
 }
 
 function addCandidate(evidence: ReturnType<typeof parseProductPage>[number], sourceLabels: Set<string>): void {
+    discoveredSellerIds.add(evidence.seller_id);
     const existing = candidates.get(evidence.seller_id);
     if (existing) {
         if (!existing.evidences.some((item) => item.product_url === evidence.product_url)) existing.evidences.push(evidence);
         for (const label of sourceLabels) existing.source_queries.add(label);
         return;
     }
-    if (candidates.size >= input.maxSellerCandidates) return;
     candidates.set(evidence.seller_id, {
         seller_id: evidence.seller_id,
         seller_name: evidence.seller_name,
@@ -168,8 +186,9 @@ function addCandidate(evidence: ReturnType<typeof parseProductPage>[number], sou
 }
 
 function addProfileOnlyCandidate(profile: MerchantProfile, source: string): void {
+    discoveredSellerIds.add(profile.seller_id);
     knownProfiles.set(profile.seller_id, profile);
-    if (candidates.has(profile.seller_id) || candidates.size >= input.maxSellerCandidates) return;
+    if (candidates.has(profile.seller_id)) return;
     candidates.set(profile.seller_id, {
         seller_id: profile.seller_id,
         seller_name: profile.seller_name ?? profile.seller_slug,
@@ -192,10 +211,10 @@ function normalized(value: string | null): string {
 
 function qualifies(lead: SellerLead): { qualified: boolean; reasons: string[] } {
     const reasons: string[] = [];
-    if ((lead.seller_rating ?? -1) < input.minSellerRating) reasons.push('seller_rating_below_minimum');
-    if ((lead.follower_count ?? -1) < input.minFollowerCount) reasons.push('follower_count_below_minimum');
-    if ((lead.product_count ?? -1) < input.minProductCount) reasons.push('product_count_below_minimum');
-    if ((lead.seller_review_count ?? -1) < input.minSellerReviewCount) reasons.push('seller_review_count_below_minimum');
+    if (input.minSellerRating > 0 && (lead.seller_rating ?? -1) < input.minSellerRating) reasons.push('seller_rating_below_minimum');
+    if (input.minFollowerCount > 0 && (lead.follower_count ?? -1) < input.minFollowerCount) reasons.push('follower_count_below_minimum');
+    if (input.minProductCount > 0 && (lead.product_count ?? -1) < input.minProductCount) reasons.push('product_count_below_minimum');
+    if (input.minSellerReviewCount > 0 && (lead.seller_review_count ?? -1) < input.minSellerReviewCount) reasons.push('seller_review_count_below_minimum');
     if (input.sellerCities.length && !input.sellerCities.some((city) => normalized(city) === normalized(lead.shipping_city))) {
         reasons.push('seller_city_not_allowed');
     }
@@ -281,6 +300,183 @@ function buildLead(candidate: MerchantCandidate, profile: MerchantProfile | null
     };
 }
 
+async function loadProductEvidence(url: string): Promise<ProductEvidence[] | null> {
+    const cached = await crawlState.getProduct<ProductEvidence[]>(url);
+    if (cached) {
+        productCacheHits += 1;
+        return cached;
+    }
+    if (productDetailFetches >= input.maxProductDetails) return null;
+    productDetailFetches += 1;
+    productDetailAttempted += 1;
+    try {
+        const html = await unlocker.fetchHtml(url, false);
+        const evidences = parseProductPage(html, url, input.maxOtherSellersPerProduct);
+        if (evidences.length === 0) throw new Error('No product seller state found');
+        productDetailSucceeded += 1;
+        await crawlState.setProduct(url, evidences);
+        return evidences;
+    } catch (error) {
+        failedSources.push({ source: url, error: String(error) });
+        log.warning('Product detail failed', { url, error: String(error) });
+        return null;
+    }
+}
+
+async function loadSellerProfile(candidate: MerchantCandidate): Promise<MerchantProfile | null> {
+    const known = knownProfiles.get(candidate.seller_id);
+    if (known) return known;
+    const cached = await crawlState.getProfile<MerchantProfile>(candidate.seller_id);
+    if (cached) {
+        sellerProfileCacheHits += 1;
+        return cached;
+    }
+    sellerProfileAttempted += 1;
+    try {
+        const html = await unlocker.fetchHtml(candidate.seller_profile_url, false);
+        const profile = parseMerchantProfile(html);
+        if (!profile) throw new Error('No merchant profile state found');
+        sellerProfileSucceeded += 1;
+        await crawlState.setProfile(candidate.seller_id, profile);
+        return profile;
+    } catch (error) {
+        sellerProfileFailed += 1;
+        failedSources.push({ source: candidate.seller_profile_url, error: String(error) });
+        return null;
+    }
+}
+
+async function processCandidate(candidate: MerchantCandidate, profile: MerchantProfile | null, progress: PageProgress): Promise<boolean> {
+    if (input.requireSellerProfile && !profile) return false;
+    let lead = buildLead(candidate, profile);
+    const qualification = qualifies(lead);
+    if (qualification.qualified) {
+        qualifiedLeadCount += 1;
+        lead.qualification_reasons = [
+            `seller_rating>=${input.minSellerRating}`,
+            `follower_count>=${input.minFollowerCount}`,
+            `product_count>=${input.minProductCount}`,
+            `seller_review_count>=${input.minSellerReviewCount}`,
+        ];
+        if (input.contactEnrichment && contactEnrichmentAttempted < input.maxContactEnrichmentLeads) {
+            contactEnrichmentAttempted += 1;
+            try {
+                const contact = await enrichPublicBusinessContacts(lead, contactUnlocker, {
+                    maxCandidates: input.maxWebsiteCandidates,
+                    minimumConfidence: input.minContactConfidence,
+                });
+                lead = { ...lead, ...contact };
+                if (contact.contact_status === 'verified') contactEnrichmentVerified += 1;
+                contactEmailsFound += contact.public_business_emails.length;
+                contactPhonesFound += contact.public_business_phones.length;
+            } catch (error) {
+                log.warning('Public business contact enrichment failed', { sellerId: lead.seller_id, error: String(error) });
+                lead.contact_status = lead.public_business_emails.length ? 'platform_only' : 'error';
+            }
+        }
+        const dedupe = await applyDedupe(dedupeStore, lead, input.dedupeMode);
+        if (dedupe.emit) {
+            await Actor.pushData(dedupe.lead);
+            emittedLeadCount += 1;
+        } else {
+            duplicateSuppressedCount += 1;
+        }
+    }
+    await crawlState.markSellerProcessed(progress, candidate.seller_id);
+    await checkpoint();
+    return true;
+}
+
+async function processSourcePage(source: { url: string; label: string }, page: number): Promise<boolean> {
+    const pageUrl = paginatedUrl(source.url, page);
+    let progress = await crawlState.getPage(source.url, page);
+    if (progress?.status === 'completed') {
+        pageSkipped += 1;
+        sourceCursors.set(progress.source_id, await crawlState.cursor(source.url, source.label, page + 1));
+        return true;
+    }
+
+    candidates.clear();
+    knownProfiles.clear();
+
+    if (progress) {
+        pageResumed += 1;
+    } else {
+        pageAttempted += 1;
+        try {
+            const html = await unlocker.fetchHtml(pageUrl, false);
+            const discovered = extractProductUrls(html, pageUrl).slice(0, input.maxProductsPerSource);
+            progress = await crawlState.beginPage(source.url, source.label, page, discovered);
+            if (isStoreUrl(source.url)) {
+                const profile = parseMerchantProfile(html);
+                if (profile) {
+                    addProfileOnlyCandidate(profile, source.label);
+                    await crawlState.setProfile(profile.seller_id, profile);
+                }
+            }
+        } catch (error) {
+            failedSources.push({ source: pageUrl, error: String(error) });
+            log.warning('Discovery source failed', { url: pageUrl, error: String(error) });
+            const cursor = await crawlState.cursor(source.url, source.label, page);
+            sourceCursors.set(cursor.source_id, cursor);
+            return false;
+        }
+    }
+
+    if (progress.product_urls.length === 0 && candidates.size === 0) {
+        await crawlState.completePage(progress, true);
+        pageCompleted += 1;
+        sourceCursors.set(progress.source_id, await crawlState.cursor(source.url, source.label, page));
+        return true;
+    }
+
+    let pageSucceeded = true;
+    const labels = new Set([source.label]);
+    const productResults = await mapConcurrent(progress.product_urls, input.maxConcurrency, async (url) => {
+        productUrls.set(url, labels);
+        return { url, evidences: await loadProductEvidence(url) };
+    });
+    for (const { evidences } of productResults) {
+        if (!evidences) {
+            pageSucceeded = false;
+            continue;
+        }
+        for (const evidence of evidences) addCandidate(evidence, labels);
+    }
+    await checkpoint();
+
+    const processed = new Set(progress.processed_seller_ids);
+    const pendingCandidates = [...candidates.values()].filter((candidate) => !processed.has(candidate.seller_id));
+    let offset = 0;
+    while (offset < pendingCandidates.length) {
+        if (sellerCandidateProcessed >= input.maxSellerCandidates || emittedLeadCount >= input.maxSellers) {
+            pageSucceeded = false;
+            break;
+        }
+        const remainingCapacity = input.maxSellerCandidates - sellerCandidateProcessed;
+        const remainingOutputCapacity = input.maxSellers - emittedLeadCount;
+        const batch = pendingCandidates.slice(offset, offset + Math.min(input.maxProfileConcurrency, remainingCapacity, remainingOutputCapacity));
+        offset += batch.length;
+        sellerCandidateProcessed += batch.length;
+        const results = await mapConcurrent(batch, input.maxProfileConcurrency, async (candidate) => ({
+            candidate,
+            profile: await loadSellerProfile(candidate),
+        }));
+        for (const { candidate, profile } of results) {
+            if (!await processCandidate(candidate, profile, progress)) pageSucceeded = false;
+        }
+    }
+
+    const processedAfter = new Set(progress.processed_seller_ids);
+    if ([...candidates.keys()].some((sellerId) => !processedAfter.has(sellerId))) pageSucceeded = false;
+    if (pageSucceeded) {
+        await crawlState.completePage(progress, false);
+        pageCompleted += 1;
+    }
+    sourceCursors.set(progress.source_id, await crawlState.cursor(source.url, source.label, pageSucceeded ? page + 1 : page));
+    return pageSucceeded;
+}
+
 await Actor.setValue('OUTPUT', summary('RUNNING'));
 log.info('Hepsiburada seller discovery started', {
     campaignId: input.campaignId,
@@ -291,101 +487,24 @@ log.info('Hepsiburada seller discovery started', {
 });
 
 try {
-    await mapConcurrent(discoverySources, input.maxConcurrency, async (source) => {
-        try {
-            const html = await unlocker.fetchHtml(source.url, false);
-            const discovered = extractProductUrls(html, source.url).slice(0, input.maxProductsPerSource);
-            for (const url of discovered) {
-                const labels = productUrls.get(url) ?? new Set<string>();
-                labels.add(source.label);
-                productUrls.set(url, labels);
-            }
-            if (isStoreUrl(source.url)) {
-                const profile = parseMerchantProfile(html);
-                if (profile) addProfileOnlyCandidate(profile, source.label);
-            }
-        } catch (error) {
-            failedSources.push({ source: source.url, error: String(error) });
-            log.warning('Discovery source failed', { url: source.url, error: String(error) });
-        }
-    });
-
-    const selectedProducts = [...productUrls.entries()].slice(0, input.maxProductDetails);
-    await mapConcurrent(selectedProducts, input.maxConcurrency, async ([url, labels]) => {
-        productDetailAttempted += 1;
-        try {
-            const html = await unlocker.fetchHtml(url, false);
-            const evidences = parseProductPage(html, url, input.maxOtherSellersPerProduct);
-            if (evidences.length === 0) throw new Error('No product seller state found');
-            productDetailSucceeded += 1;
-            for (const evidence of evidences) addCandidate(evidence, labels);
-        } catch (error) {
-            failedSources.push({ source: url, error: String(error) });
-            log.warning('Product detail failed', { url, error: String(error) });
-        }
-    });
-    await checkpoint();
-
-    const sellerCandidates = [...candidates.values()].slice(0, input.maxSellerCandidates);
-    for (let offset = 0; offset < sellerCandidates.length && emittedLeadCount < input.maxSellers; offset += input.maxProfileConcurrency) {
-        const batch = sellerCandidates.slice(offset, offset + input.maxProfileConcurrency);
-        const results = await mapConcurrent(batch, input.maxProfileConcurrency, async (candidate) => {
-            sellerProfileAttempted += 1;
-            const known = knownProfiles.get(candidate.seller_id);
-            if (known) {
-                sellerProfileSucceeded += 1;
-                return { candidate, profile: known };
-            }
-            try {
-                const html = await unlocker.fetchHtml(candidate.seller_profile_url, false);
-                const profile = parseMerchantProfile(html);
-                if (!profile) throw new Error('No merchant profile state found');
-                sellerProfileSucceeded += 1;
-                return { candidate, profile };
-            } catch (error) {
-                sellerProfileFailed += 1;
-                failedSources.push({ source: candidate.seller_profile_url, error: String(error) });
-                return { candidate, profile: null };
-            }
-        });
-
-        for (const { candidate, profile } of results) {
+    for (const source of discoverySources) {
+        const startPage = await crawlState.resolveStartPage(source.url, input.startPage, input.resumeFromCheckpoint);
+        const initialCursor = await crawlState.cursor(source.url, source.label, startPage);
+        sourceCursors.set(initialCursor.source_id, initialCursor);
+        for (let page = startPage; page < startPage + input.maxPagesPerSource; page += 1) {
             if (emittedLeadCount >= input.maxSellers) break;
-            if (input.requireSellerProfile && !profile) continue;
-            let lead = buildLead(candidate, profile);
-            const qualification = qualifies(lead);
-            if (!qualification.qualified) continue;
-            qualifiedLeadCount += 1;
-            lead.qualification_reasons = [
-                `seller_rating>=${input.minSellerRating}`,
-                `follower_count>=${input.minFollowerCount}`,
-                `product_count>=${input.minProductCount}`,
-                `seller_review_count>=${input.minSellerReviewCount}`,
-            ];
-            if (input.contactEnrichment && contactEnrichmentAttempted < input.maxContactEnrichmentLeads) {
-                contactEnrichmentAttempted += 1;
-                try {
-                    const contact = await enrichPublicBusinessContacts(lead, contactUnlocker, {
-                        maxCandidates: input.maxWebsiteCandidates,
-                        minimumConfidence: input.minContactConfidence,
-                    });
-                    lead = { ...lead, ...contact };
-                    if (contact.contact_status === 'verified') contactEnrichmentVerified += 1;
-                    contactEmailsFound += contact.public_business_emails.length;
-                    contactPhonesFound += contact.public_business_phones.length;
-                } catch (error) {
-                    log.warning('Public business contact enrichment failed', { sellerId: lead.seller_id, error: String(error) });
-                    lead.contact_status = lead.public_business_emails.length ? 'platform_only' : 'error';
-                }
-            }
-            const dedupe = await applyDedupe(dedupeStore, lead, input.dedupeMode);
-            if (!dedupe.emit) {
-                duplicateSuppressedCount += 1;
-                continue;
-            }
-            await Actor.pushData(dedupe.lead);
-            emittedLeadCount += 1;
-            await checkpoint();
+            if (!await processSourcePage(source, page)) break;
+            const cursor = await crawlState.cursor(source.url, source.label, page + 1);
+            if (cursor.exhausted) break;
+        }
+    }
+
+    for (const direct of directProductUrls) {
+        if (emittedLeadCount >= input.maxSellers) break;
+        const synthetic = await crawlState.getPage(direct.url, 1)
+            ?? await crawlState.beginPage(direct.url, direct.label, 1, [direct.url]);
+        if (synthetic.status !== 'completed') {
+            await processSourcePage(direct, 1);
         }
     }
 

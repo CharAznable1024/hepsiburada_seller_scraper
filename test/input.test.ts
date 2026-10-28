@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_SEARCH_QUERIES, normalizeInput } from '../src/input.js';
+import { DEFAULT_CATEGORY_URLS, normalizeInput } from '../src/input.js';
 
 describe('normalizeInput', () => {
     it('normalizes Aime tracing and operational defaults', () => {
@@ -9,10 +9,14 @@ describe('normalizeInput', () => {
         expect(input.shardId).toBe('shd_1');
         expect(input.searchQueries).toEqual(['kahve makinesi']);
         expect(input.maxSellers).toBe(10);
+        expect(input.minProductCount).toBe(0);
         expect(input.requireSellerProfile).toBe(true);
-        expect(input.contactEnrichment).toBe(true);
+        expect(input.contactEnrichment).toBe(false);
         expect(input.maxContactEnrichmentLeads).toBe(5);
         expect(input.minContactConfidence).toBe(70);
+        expect(input.startPage).toBeNull();
+        expect(input.resumeFromCheckpoint).toBe(true);
+        expect(input.dedupeMode).toBe('new_only');
     });
 
     it('accepts request-list URL objects', () => {
@@ -20,10 +24,17 @@ describe('normalizeInput', () => {
         expect(input.startUrls).toEqual(['https://www.hepsiburada.com/magaza/viratech?tab=profile']);
     });
 
-    it('uses balanced default categories when no discovery source is supplied', () => {
+    it('starts the full crawl from Electronics when no discovery source is supplied', () => {
         const input = normalizeInput({});
-        expect(input.searchQueries).toEqual(DEFAULT_SEARCH_QUERIES);
-        expect(input.startUrls).toEqual([]);
+        expect(input.searchQueries).toEqual([]);
+        expect(input.startUrls).toEqual(DEFAULT_CATEGORY_URLS);
+    });
+
+    it('accepts an explicit page shard', () => {
+        const input = normalizeInput({ startPage: 21, maxPagesPerSource: 10, resumeFromCheckpoint: false });
+        expect(input.startPage).toBe(21);
+        expect(input.maxPagesPerSource).toBe(10);
+        expect(input.resumeFromCheckpoint).toBe(false);
     });
 
     it('rejects non-Hepsiburada URLs and invalid IDs', () => {

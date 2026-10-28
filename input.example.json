@@ -1,6 +1,7 @@
 {
   "campaignId": "cmp_hepsiburada_smoke",
-  "shardId": "shd_default_categories_01",
+  "shardId": "shd_electronics_01",
+  "resumeFromCheckpoint": true,
   "maxPagesPerSource": 1,
   "maxProductsPerSource": 10,
   "maxProductDetails": 5,
@@ -8,9 +9,8 @@
   "maxSellers": 3,
   "minSellerRating": 0,
   "minFollowerCount": 0,
-  "minProductCount": 1,
-  "contactEnrichment": true,
-  "maxContactEnrichmentLeads": 3,
-  "minContactConfidence": 70,
-  "dedupeMode": "all"
+  "minProductCount": 0,
+  "contactEnrichment": false,
+  "dedupeMode": "new_only",
+  "dedupeStoreName": "hepsiburada-electronics-full-crawl-v1"
 }
