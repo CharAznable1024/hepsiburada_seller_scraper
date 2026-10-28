@@ -1,8 +1,14 @@
 export type DedupeMode = 'all' | 'new_only' | 'new_and_updated';
+export type CrawlScope = 'full_platform' | 'custom';
+export type AccessMode = 'direct' | 'apify_proxy' | 'bright_data' | 'auto';
 
 export interface ActorInput {
     campaignId?: unknown;
     shardId?: unknown;
+    crawlScope?: unknown;
+    maxCategoriesPerRun?: unknown;
+    accessMode?: unknown;
+    apifyProxyCountry?: unknown;
     searchQueries?: unknown;
     startUrls?: unknown;
     sellerCities?: unknown;
@@ -35,6 +41,10 @@ export interface ActorInput {
 export interface Input {
     campaignId: string | null;
     shardId: string | null;
+    crawlScope: CrawlScope;
+    maxCategoriesPerRun: number;
+    accessMode: AccessMode;
+    apifyProxyCountry: string;
     searchQueries: string[];
     startUrls: string[];
     sellerCities: string[];
@@ -72,6 +82,15 @@ export interface UnlockerUsage {
     static_requests: number;
     rendered_requests: number;
     estimated_cost_usd: number;
+}
+
+export interface ApifyProxyUsage {
+    logical_requests: number;
+    request_attempts: number;
+    successful_requests: number;
+    failed_attempts: number;
+    response_bytes: number;
+    response_gigabytes: number;
 }
 
 export interface ProductEvidence {
@@ -213,6 +232,13 @@ export interface RunSummary {
     qualified_count: number;
     next_cursor: CrawlCursor | null;
     has_more: boolean;
+    crawl_scope: CrawlScope;
+    category_manifest_version: string | null;
+    total_category_count: number;
+    completed_category_count: number;
+    remaining_category_count: number;
+    categories_processed_this_run: number;
+    current_category: string | null;
     start_page: number | null;
     resume_from_checkpoint: boolean;
     page_attempted: number;
@@ -239,6 +265,9 @@ export interface RunSummary {
     contact_emails_found: number;
     contact_phones_found: number;
     failed_sources: Array<{ source: string; error: string }>;
+    access_mode: AccessMode;
+    apify_proxy_country: string;
+    apify_proxy_usage: ApifyProxyUsage;
     unlocker_configured: boolean;
     unlocker_usage: UnlockerUsage;
     started_at: string;

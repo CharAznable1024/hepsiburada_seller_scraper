@@ -1,19 +1,19 @@
 # Hepsiburada Seller Scraper
 
-Custom Apify Actor for discovering Hepsiburada merchant leads. It starts from public keyword, category, product, or store URLs, discovers merchants from product pages, and enriches each merchant from the public store profile. If the caller supplies no discovery source, the resumable full-catalog flow starts from the current Electronics / Computer & Tablet category at `https://www.hepsiburada.com/bilgisayar-sistemleri-ve-ekipmanlari-c-2147483646`.
+Custom Apify Actor for discovering Hepsiburada merchant leads. The default `full_platform` scope traverses a versioned manifest of 18 top-level categories extracted from the current public navigation. Custom keyword, category, product, and store URL discovery remains available through `crawlScope: "custom"`.
 
 ## Resumable full-catalog crawl
 
-Each Run handles a bounded page shard. Set `startPage` to assign a page range explicitly, or omit it with `resumeFromCheckpoint: true` to continue from the cursor stored in `dedupeStoreName`. A page is marked complete only after its selected product details and seller candidates have been processed. Partial pages retain their seller progress and retry only unfinished work.
+Each Run handles a bounded number of categories and pages. In `full_platform` mode, `maxCategoriesPerRun` selects the first unfinished categories and every category owns an independent cursor in `dedupeStoreName`. A page is marked complete only after its selected product details and seller candidates have been processed. Partial pages retain their seller progress and retry only unfinished work.
 
 The persistent state store caches completed pages, parsed product details, and parsed seller profiles. Re-running a completed page therefore makes no Bright Data request for that page; overlapping pages/categories reuse product and profile results. Use one store name per campaign and avoid running the same source/page concurrently. The default `dedupeMode` is `new_only`, so the Dataset emits one row per Hepsiburada `seller_id`; Aime should still upsert by `platform + seller_id` during cross-Run aggregation.
 
-`OUTPUT.next_cursor.sources[]` contains `source_id`, `source_url`, `next_page`, and `exhausted`. Aime can either pass `next_page` back as `startPage` or leave `startPage` unset and let the Actor resume from the stored checkpoint.
+`OUTPUT.next_cursor.sources[]` contains `source_id`, `source_url`, `next_page`, and `exhausted` for all manifest categories. `total_category_count`, `completed_category_count`, `remaining_category_count`, `categories_processed_this_run`, and `current_category` expose platform-level progress. Aime should leave `startPage` unset and start another shard while `has_more` is true.
 
 ## Data flow
 
 ```text
-searchQueries / startUrls
+crawlScope=full_platform / versioned category manifest
         |
         v
 Hepsiburada search/category pages -- extract product URLs
@@ -35,15 +35,17 @@ The parser reads server-rendered JSON state (`reduxStore` and `MCONTENT.MERCHANT
 | Field | Meaning |
 | --- | --- |
 | `campaignId`, `shardId` | Optional Aime pass-through tracing IDs |
-| `searchQueries` | Optional product, brand, or category phrases; empty uses balanced default categories |
-| `startUrls` | Search/category/product/store URLs |
+| `crawlScope` | `full_platform` (default) or `custom` |
+| `maxCategoriesPerRun` | Maximum unfinished manifest categories scheduled in one Run |
+| `accessMode`, `apifyProxyCountry` | Network path: direct, Apify Residential Proxy, Bright Data, or fallback chain |
+| `searchQueries`, `startUrls` | Custom-mode discovery sources; leave empty in full-platform mode |
 | `maxSellers` | Maximum qualified sellers checkpointed to Dataset |
 | `maxSellerCandidates` | Maximum public store profiles inspected |
 | `minSellerRating`, `minFollowerCount`, `minProductCount`, `minSellerReviewCount` | Seller qualification filters |
 | `sellerCities`, `sellerTypes` | Optional exact public-profile filters |
 | `dedupeMode`, `dedupeStoreName` | Cross-run seller deduplication |
 
-Both discovery fields may be empty. In that case the Actor crawls the Electronics category and stops after `maxSellers` qualified leads or the configured page shard is complete.
+When both discovery fields are empty, the Actor traverses the complete built-in platform manifest. It automatically skips exhausted categories and continues the first unfinished category in later Runs that use the same `dedupeStoreName`.
 
 ## Output
 
@@ -61,7 +63,7 @@ Qualified rows are written immediately with `Actor.pushData`, so already checkpo
 
 ## Access and cost
 
-Direct cloud requests to Hepsiburada currently time out. The Actor automatically uses the configured Bright Data Web Unlocker secret and Turkey routing; operators do not select a proxy mode.
+Direct cloud requests to Hepsiburada have timed out in previous tests. `accessMode: "apify_proxy"` routes every request through Apify Residential Proxy with Turkey routing and never calls Bright Data. `bright_data` preserves the previous Web Unlocker path, while `auto` tries direct, Apify Proxy, then Bright Data when configured.
 
 With the current Bright Data plan, each successful page request is estimated at **$0.0015**. Approximate successful requests are:
 
@@ -71,7 +73,7 @@ listing pages + product detail pages + unique seller profile pages + optional co
 
 For example, 1 search page + 5 product pages + 10 seller profiles is about 16 successful unlock requests, or roughly **$0.024**, plus Apify compute. Actual runs may use more requests when retries are needed.
 
-Contact enrichment is enabled by default for up to five qualified sellers. The Actor searches Bing through the same Web Unlocker, rejects marketplace/directory/social domains as official websites, then verifies candidates against the seller/store name, legal trade name, VKN, MERSIS, city and evidenced brands. A contact is marked `verified` only when the identity score reaches `minContactConfidence` and the website publishes at least one business contact or social link. Missing or ambiguous contacts remain empty; values are never guessed.
+Contact enrichment is disabled by default for full-platform runs. When explicitly enabled, the Actor searches Bing through the same Web Unlocker, rejects marketplace/directory/social domains as official websites, then verifies candidates against the seller/store name, legal trade name, VKN, MERSIS, city and evidenced brands. Missing or ambiguous contacts remain empty; values are never guessed.
 
 ## Local validation
 
@@ -83,4 +85,4 @@ npm run build
 apify validate-schema
 ```
 
-Local live runs require `BRIGHT_DATA_API_KEY`. Cloud deployment injects the locally configured Apify secret through `.actor/actor.json`.
+Local Bright Data runs require `BRIGHT_DATA_API_KEY`. Apify Residential Proxy is intended for cloud Actor runs; local external proxy access depends on the Apify account plan.

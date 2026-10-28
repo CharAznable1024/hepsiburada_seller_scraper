@@ -9,9 +9,12 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
-    "apify": "^3.7.0"
+    "apify": "^3.7.0",
+    "got-scraping": "^4.2.2"
   },
   "devDependencies": {
     "@apify/tsconfig": "^0.2.0",

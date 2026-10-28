@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_CATEGORY_URLS, normalizeInput } from '../src/input.js';
+import { normalizeInput } from '../src/input.js';
 
 describe('normalizeInput', () => {
     it('normalizes Aime tracing and operational defaults', () => {
@@ -8,6 +8,9 @@ describe('normalizeInput', () => {
         expect(input.campaignId).toBe('cmp_1');
         expect(input.shardId).toBe('shd_1');
         expect(input.searchQueries).toEqual(['kahve makinesi']);
+        expect(input.crawlScope).toBe('custom');
+        expect(input.accessMode).toBe('bright_data');
+        expect(input.apifyProxyCountry).toBe('TR');
         expect(input.maxSellers).toBe(10);
         expect(input.minProductCount).toBe(0);
         expect(input.requireSellerProfile).toBe(true);
@@ -17,6 +20,7 @@ describe('normalizeInput', () => {
         expect(input.startPage).toBeNull();
         expect(input.resumeFromCheckpoint).toBe(true);
         expect(input.dedupeMode).toBe('new_only');
+        expect(input.dedupeStoreName).toBe('hepsiburada-seller-lead-state-v1');
     });
 
     it('accepts request-list URL objects', () => {
@@ -24,14 +28,17 @@ describe('normalizeInput', () => {
         expect(input.startUrls).toEqual(['https://www.hepsiburada.com/magaza/viratech?tab=profile']);
     });
 
-    it('starts the full crawl from Electronics when no discovery source is supplied', () => {
+    it('starts the versioned full-platform crawl when no discovery source is supplied', () => {
         const input = normalizeInput({});
+        expect(input.crawlScope).toBe('full_platform');
+        expect(input.maxCategoriesPerRun).toBe(1);
         expect(input.searchQueries).toEqual([]);
-        expect(input.startUrls).toEqual(DEFAULT_CATEGORY_URLS);
+        expect(input.startUrls).toEqual([]);
+        expect(input.dedupeStoreName).toBe('hepsiburada-full-platform-v1');
     });
 
-    it('accepts an explicit page shard', () => {
-        const input = normalizeInput({ startPage: 21, maxPagesPerSource: 10, resumeFromCheckpoint: false });
+    it('accepts an explicit page shard in custom mode', () => {
+        const input = normalizeInput({ searchQueries: ['telefon'], startPage: 21, maxPagesPerSource: 10, resumeFromCheckpoint: false });
         expect(input.startPage).toBe(21);
         expect(input.maxPagesPerSource).toBe(10);
         expect(input.resumeFromCheckpoint).toBe(false);
@@ -40,5 +47,16 @@ describe('normalizeInput', () => {
     it('rejects non-Hepsiburada URLs and invalid IDs', () => {
         expect(() => normalizeInput({ startUrls: ['https://example.com/'], campaignId: 'bad id' })).toThrow();
         expect(() => normalizeInput({ searchQueries: ['phone'], campaignId: 'bad id' })).toThrow('campaignId is invalid');
+    });
+
+    it('rejects custom sources and explicit pages in full-platform mode', () => {
+        expect(() => normalizeInput({ crawlScope: 'full_platform', searchQueries: ['telefon'] })).toThrow('must be empty');
+        expect(() => normalizeInput({ crawlScope: 'full_platform', startPage: 2 })).toThrow('only supported in custom mode');
+    });
+
+    it('normalizes Apify Residential Proxy settings', () => {
+        const input = normalizeInput({ accessMode: 'apify_proxy', apifyProxyCountry: 'tr' });
+        expect(input.accessMode).toBe('apify_proxy');
+        expect(input.apifyProxyCountry).toBe('TR');
     });
 });

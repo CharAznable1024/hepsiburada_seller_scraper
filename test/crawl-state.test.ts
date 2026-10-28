@@ -45,4 +45,14 @@ describe('CrawlState', () => {
         expect(await state.getProduct(product)).toEqual([{ seller_id: 'seller-1' }]);
         expect(await state.getProfile('seller-1')).toEqual({ seller_id: 'seller-1' });
     });
+
+    it('detects a repeated listing so redirected last pages can terminate a category', async () => {
+        const { store } = memoryStore();
+        const state = new CrawlState(store, 'sayfa');
+        const source = 'https://www.hepsiburada.com/telefonlar-c-2147483642';
+        const products = ['https://www.hepsiburada.com/a-p-HBC1', 'https://www.hepsiburada.com/b-p-HBC2'];
+        expect(await state.hasSeenListing(source, products)).toBe(false);
+        await state.rememberListing(source, 1, products);
+        expect(await state.hasSeenListing(source, [...products].reverse())).toBe(true);
+    });
 });

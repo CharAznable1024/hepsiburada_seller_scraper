@@ -22,10 +22,46 @@
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "maxLength": 128
     },
+    "crawlScope": {
+      "title": "Crawl scope",
+      "type": "string",
+      "description": "full_platform uses the versioned built-in public category manifest. custom uses searchQueries or startUrls.",
+      "editor": "select",
+      "default": "full_platform",
+      "enum": ["full_platform", "custom"],
+      "enumTitles": ["Full platform", "Custom sources"],
+      "sectionCaption": "Category coverage"
+    },
+    "maxCategoriesPerRun": {
+      "title": "Maximum categories per Run",
+      "type": "integer",
+      "description": "Maximum unfinished manifest categories scheduled in one full-platform Run. Completed categories are skipped automatically.",
+      "editor": "number",
+      "default": 1,
+      "minimum": 1,
+      "maximum": 50
+    },
+    "accessMode": {
+      "title": "Network access mode",
+      "type": "string",
+      "description": "Choose direct HTTP, Apify Residential Proxy, Bright Data Web Unlocker, or automatic fallback.",
+      "editor": "select",
+      "default": "bright_data",
+      "enum": ["direct", "apify_proxy", "bright_data", "auto"],
+      "enumTitles": ["Direct only", "Apify Residential Proxy", "Bright Data", "Automatic fallback"]
+    },
+    "apifyProxyCountry": {
+      "title": "Apify Proxy country",
+      "type": "string",
+      "description": "Two-letter country code used by Apify Residential Proxy.",
+      "editor": "textfield",
+      "default": "TR",
+      "pattern": "^[A-Za-z]{2}$"
+    },
     "searchQueries": {
       "title": "Search queries",
       "type": "array",
-      "description": "Optional product, brand, or category phrases. Leave empty together with startUrls to start the resumable full-catalog crawl from Electronics.",
+      "description": "Custom-mode product, brand, or category phrases. Leave empty in full-platform mode.",
       "editor": "stringList",
       "default": [],
       "prefill": [],
@@ -35,7 +71,7 @@
     "startUrls": {
       "title": "Hepsiburada URLs",
       "type": "array",
-      "description": "Optional public search, category, product, or store URLs. When both source fields are empty, the Actor starts from the Electronics category.",
+      "description": "Custom-mode public search, category, product, or store URLs. Leave empty in full-platform mode.",
       "editor": "requestListSources",
       "default": [],
       "prefill": []
@@ -53,7 +89,7 @@
     "startPage": {
       "title": "Explicit start page",
       "type": "integer",
-      "description": "Optional page override for a manually assigned shard. Leave unset to continue from the persistent checkpoint.",
+      "description": "Custom mode only: optional page override for a manually assigned shard. Full-platform mode always uses per-category checkpoints.",
       "editor": "number",
       "minimum": 1,
       "maximum": 1000000
@@ -217,9 +253,8 @@
     "dedupeStoreName": {
       "title": "Persistent state store",
       "type": "string",
-      "description": "Named Key-Value Store shared across Runs; use a distinct name per campaign when isolation is required.",
+      "description": "Named Key-Value Store shared across Runs. Leave unset for the scope-specific default; use a distinct name per campaign for isolation.",
       "editor": "textfield",
-      "default": "hepsiburada-seller-lead-state-v1",
       "pattern": "^[A-Za-z0-9._-]{3,63}$"
     },
     "contactEnrichment": {

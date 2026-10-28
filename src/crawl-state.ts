@@ -105,6 +105,21 @@ export class CrawlState {
         } satisfies StoredCursor);
     }
 
+    async hasSeenListing(sourceUrl: string, productUrls: string[]): Promise<boolean> {
+        if (productUrls.length === 0) return false;
+        const signature = hash([...new Set(productUrls)].sort().join('\n'));
+        return (await this.store.getValue<{ first_seen_at: string }>(`CRAWL_LISTING_${this.sourceId(sourceUrl)}_${signature}`)) !== null;
+    }
+
+    async rememberListing(sourceUrl: string, page: number, productUrls: string[]): Promise<void> {
+        if (productUrls.length === 0) return;
+        const signature = hash([...new Set(productUrls)].sort().join('\n'));
+        await this.store.setValue(`CRAWL_LISTING_${this.sourceId(sourceUrl)}_${signature}`, {
+            page,
+            first_seen_at: new Date().toISOString(),
+        });
+    }
+
     async cursor(sourceUrl: string, label: string, fallbackPage: number): Promise<SourceCursor> {
         const stored = await this.store.getValue<StoredCursor>(this.cursorKey(sourceUrl));
         return {

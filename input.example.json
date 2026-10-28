@@ -1,6 +1,10 @@
 {
   "campaignId": "cmp_hepsiburada_smoke",
-  "shardId": "shd_electronics_01",
+  "shardId": "shd_full_platform_0001",
+  "crawlScope": "full_platform",
+  "maxCategoriesPerRun": 1,
+  "accessMode": "apify_proxy",
+  "apifyProxyCountry": "TR",
   "resumeFromCheckpoint": true,
   "maxPagesPerSource": 1,
   "maxProductsPerSource": 10,
@@ -12,5 +16,5 @@
   "minProductCount": 0,
   "contactEnrichment": false,
   "dedupeMode": "new_only",
-  "dedupeStoreName": "hepsiburada-electronics-full-crawl-v1"
+  "dedupeStoreName": "hepsiburada-full-platform-v1"
 }

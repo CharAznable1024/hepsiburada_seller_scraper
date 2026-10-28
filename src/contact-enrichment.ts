@@ -1,5 +1,6 @@
 import type { SellerLead } from './types.js';
-import { BrightDataUnlocker, stripHtml } from './unlocker.js';
+import type { HtmlFetcher } from './apify-proxy.js';
+import { stripHtml } from './unlocker.js';
 
 interface ContactOptions {
     maxCandidates: number;
@@ -210,7 +211,7 @@ function empty(lead: SellerLead, status: ContactFields['contact_status']): Conta
 
 export async function enrichPublicBusinessContacts(
     lead: SellerLead,
-    unlocker: BrightDataUnlocker,
+    unlocker: HtmlFetcher,
     options: ContactOptions,
 ): Promise<ContactFields> {
     const queryUrl = `https://www.bing.com/search?q=${encodeURIComponent(searchQuery(lead))}&setlang=tr-TR&cc=tr&count=10`;
